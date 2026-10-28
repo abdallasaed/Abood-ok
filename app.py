@@ -6,7 +6,7 @@ import threading
 import requests
 import html as html_lib
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 import uvicorn
 
@@ -16,7 +16,7 @@ session = requests.Session()
 extracted_urls_cache = {}
 
 # ==========================================
-# Keep Alive (للتشغيل المحلي فقط، لا يحتاج على Render)
+# Keep Alive (اختياري، للتشغيل المحلي أو منع النوم)
 # ==========================================
 def keep_alive():
     while True:
@@ -41,7 +41,8 @@ def extract_okru(video_id: str):
     now = time.time()
     if video_id in extracted_urls_cache:
         cached = extracted_urls_cache[video_id]
-        if now - cached["timestamp"] < 60:
+        # زيادة مدة الكاش إلى ساعة (3600 ثانية) بدلاً من 60 ثانية
+        if now - cached["timestamp"] < 3600:
             return cached["url"]
 
     headers = {
@@ -74,7 +75,7 @@ def extract_okru(video_id: str):
     return None
 
 # ==========================================
-# واجهة HTML (نفس التصميم العربي)
+# واجهة HTML
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -139,6 +140,17 @@ def index():
 # ==========================================
 # مسارات البث
 # ==========================================
+
+# 1. مسار HEAD للاستجابة الفورية لطلبات التحقق من المشغل
+@app.head("/live/{video_id}.m3u8")
+def head_m3u8(video_id: str):
+    return Response(
+        status_code=200,
+        media_type="application/vnd.apple.mpegurl",
+        headers={"Content-Length": "0"}
+    )
+
+# 2. مسار GET الرئيسي لملف m3u8
 @app.get("/live/{video_id}.m3u8")
 def master_m3u8(video_id: str, request: Request):
     m3u8_url = extract_okru(video_id)
